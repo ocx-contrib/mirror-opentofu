@@ -113,8 +113,8 @@ assets:
   darwin/arm64:
     - "^tofu_\\d+\\.\\d+\\.\\d+_darwin_arm64\\.tar\\.gz$"
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
-  # windows/amd64:
-  #   - "^tofu_\\d+\\.\\d+\\.\\d+_windows_amd64\\.tar\\.gz$"
+  windows/amd64:
+    - "^tofu_\\d+\\.\\d+\\.\\d+_windows_amd64\\.tar\\.gz$"
 
 # Every archive is FLAT: `tofu` (`tofu.exe` on windows) sits at the archive
 # ROOT beside CHANGELOG.md, LICENSE and README.md, with no wrapper directory

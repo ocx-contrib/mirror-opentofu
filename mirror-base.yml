@@ -94,9 +94,9 @@ platforms:
     runner: macos-14
     shell: bash
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
-  # windows/amd64:
-  #   runner: windows-latest
-  #   shell: pwsh
+  windows/amd64:
+    runner: windows-latest
+    shell: pwsh
   #
   # windows/arm64 is DELIBERATELY ABSENT, not staged: upstream ships no
   # windows arm64 asset on ANY release in range. Verified across all 31
