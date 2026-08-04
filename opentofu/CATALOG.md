@@ -53,17 +53,6 @@ State lives in a backend (local file by default; S3, GCS, HTTP and others are
 built in), and `TF_*` environment variables — `TF_VAR_name`, `TF_LOG`,
 `TF_IN_AUTOMATION` — configure runs without editing the configuration.
 
-## Install with ocx
-
-```sh
-ocx install ocx.sh/opentofu/opentofu
-```
-
-```sh
-# or pin a specific version
-ocx install ocx.sh/opentofu/opentofu:1.12.5
-```
-
 ## Links
 
 - [OpenTofu on GitHub](https://github.com/opentofu/opentofu)
