@@ -6,7 +6,7 @@ name: opentofu
 
 on:
   schedule:
-    - cron: '3 */6 * * *'
+    - cron: '30 3-23/6 * * *'
   workflow_dispatch:
   push:
     branches: [main]
