@@ -1,0 +1,113 @@
+# Shared base for every spec in this repository (opentofu, the OpenTofu CLI).
+#
+# NOT a spec: it has no name/target/source and is never loaded on its own.
+# Everything a package owns — name, target, source, assets, asset_type,
+# bin_scan, metadata, catalog, tests, versions, announce, annotations — stays
+# in that package's own mirror.yml.
+#
+# ⚠️ `extends:` is a SHALLOW merge of top-level keys. A spec that sets a key
+# below replaces that block OUTRIGHT — there is no per-key merge. `platforms:`
+# is where this bites: it carries BOTH the runner matrix and the container
+# legs, so a child that restates it to tweak one runner silently drops every
+# `containers:` entry. Nothing reds — the legs simply stop existing, and every
+# os.features claim in that spec goes back to being merely asserted. Restate
+# `platforms:` IN FULL or not at all. opentofu/mirror.yml deliberately does NOT
+# restate it, which removes that trap structurally.
+
+skip_prereleases: true
+cascade: true
+
+# Upstream versions are bare semver (`1.12.5`) with no `+build` segment, so the
+# fleet default applies with no exception. A cascade tag (`latest`, `1`, `1.12`)
+# re-points on every re-publish; without a build segment the new manifest would
+# reuse the bare version tag and orphan the prior digest for registry GC,
+# breaking any `@sha256:` pin in a consumer's ocx.lock.
+build_timestamp: date
+
+verify:
+  github_asset_digest: true
+
+concurrency:
+  # Assets are 23–34 MB gzip tarballs around a single ~83–118 MB static Go
+  # binary plus CHANGELOG.md, LICENSE and README.md.
+  max_downloads: 8
+  max_bundles: 4
+  max_pushes: 2
+  rate_limit_ms: 100
+  max_retries: 3
+  compression_threads: 0
+
+# ─── Platform matrix ────────────────────────────────────────────────────────
+#
+# `os.features` states what an artifact REQUIRES OF THE HOST — it is not a
+# label for how it was built. Upstream's Linux binaries are cgo-free Go builds,
+# byte-measured on BOTH declared arches at BOTH ends of the mirrored range
+# (1.10.0 and 1.12.5): `statically linked`, zero PT_INTERP, zero DT_NEEDED, and
+# NOT UPX-packed (section headers present at offset 400, zero `UPX` markers —
+# a packed stub would have made `file` say "statically linked" for a glibc
+# build too). The measurement transcript is recorded above opentofu/mirror.yml's
+# `assets:`.
+#
+# So both Linux keys are BARE. `+libc.glibc` or `+libc.musl` would be a false
+# requirement that hid the package from hosts it in fact runs on.
+#
+# A bare key claims universality, so it must prove it: ubuntu (glibc) + alpine
+# (musl) + fedora (a different glibc vintage). The ALPINE LEG IS THE PROOF —
+# drop it and the universal claim is merely asserted.
+#
+# ─── NO `containers[].setup:` — deliberate ──────────────────────────────────
+#
+# The smoke exercises `tofu version`, `tofu fmt`, `tofu validate -json` and
+# `tofu console`, all of which are pure in-process HCL work against files the
+# test writes into scratch. `tofu` shells out to nothing on these paths (no
+# git, no ssh, no tar) and reaches no network: the configuration declares no
+# provider and no backend, so `validate` and `console` need no `tofu init`,
+# which is the only verb that would fetch anything. Provisioning packages into
+# the legs would make them prove LESS — the bare `os.features` key claims the
+# artifact needs nothing of the host, and these verbs are exactly that claim.
+platforms:
+  linux/amd64:
+    runner: ubuntu-latest
+    containers:
+      - { image: "ubuntu:24.04", shell: bash }
+      - { image: "alpine:3.20",  shell: sh }
+      - { image: "fedora:40",    shell: bash }
+  linux/arm64:
+    # arm64 container legs run natively — no qemu — so the runner arch must
+    # match the platform or the renderer reds the leg up front.
+    runner: ubuntu-24.04-arm
+    containers:
+      - { image: "ubuntu:24.04", shell: bash }
+      - { image: "alpine:3.20",  shell: sh }
+      - { image: "fedora:40",    shell: bash }
+  # ── Pass 2 (darwin) ────────────────────────────────────────────────────────
+  # Kept commented in lockstep with the matching `assets:` keys in
+  # opentofu/mirror.yml. A declared platform with no resolvable asset does not
+  # red — it boots a real runner and reports SUCCESS having tested nothing —
+  # so the platform key and its asset regex are uncommented in the SAME pass.
+  # darwin/amd64:
+  #   # Intel slice tested on the arm64 macos-14 runner via Rosetta 2 —
+  #   # GitHub's native macos-13 Intel pool is exhausted and deadlocks push.
+  #   runner: macos-14
+  #   prefix: ["arch", "-x86_64"]
+  # darwin/arm64:
+  #   runner: macos-14
+  #   shell: bash
+  # ── Pass 3 (windows) ───────────────────────────────────────────────────────
+  # windows/amd64:
+  #   runner: windows-latest
+  #   shell: pwsh
+  #
+  # windows/arm64 is DELIBERATELY ABSENT, not staged: upstream ships no
+  # windows arm64 asset on ANY release in range. Verified across all 31
+  # in-range tags (1.10.0 … 1.12.5) — the windows assets are `windows_386` and
+  # `windows_amd64` only, and ocx has no `386` Architecture. Same for
+  # freebsd/openbsd/solaris and every 32-bit arm/386 asset upstream publishes.
+  #
+  # No `containers:` on darwin or windows — those runners have no Linux
+  # container engine, and the key is rejected at spec load.
+
+notify:
+  discord:
+    webhook_secret: OCX_MIRROR_DISCORD_HOOK
+    user_id: "227748867204972545"  # pinged in-message on failures

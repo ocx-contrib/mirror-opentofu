@@ -1,0 +1,177 @@
+# ⚠ `extends:` is a SHALLOW merge of TOP-LEVEL KEYS. Setting a key here
+# REPLACES the base's block outright — there is no per-key merge. `platforms:`
+# is deliberately NOT restated below: it carries the container legs that make
+# this spec's bare Linux keys honest, and restating it to tweak one runner
+# would drop them all without reddening anything.
+extends: ../mirror-base.yml
+
+name: opentofu
+
+# Logical index package `opentofu/opentofu` at the physical path
+# `ghcr.io/ocx-contrib/opentofu/opentofu` — slash segments, never
+# hyphen-flattened. Two segments always; the GitHub org IS the project's own
+# brand, so the org names the namespace and the tool names the package (the
+# binary is `tofu`, but the package segment is the name the project publishes
+# under). The first segment must be this repo's own GitHub owner: GITHUB_TOKEN
+# only authorises packages owned by the repo the workflow runs in.
+target:
+  registry: ghcr.io
+  repository: ocx-contrib/opentofu/opentofu
+
+source:
+  type: github_release
+  owner: opentofu
+  repo: opentofu
+  # Tags carry a "v" prefix (`v1.12.5`); the captured version does not. The
+  # anchored `$` keeps every prerelease tag out by construction —
+  # `v1.12.0-rc1`, `v1.11.0-beta1`, `v1.10.0-alpha2` all fail the pattern
+  # before `skip_prereleases` is even consulted.
+  tag_pattern: "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+
+# ─── libc gate (Phase 3.5) — the evidence, not the conclusion ───────────────
+#
+# "Go" is not the verdict — a cgo-enabled Go build links libc dynamically.
+# Measured on BOTH declared Linux arches at BOTH ends of the mirrored range
+# (1.10.0 and 1.12.5), because a toolchain can change mid-series:
+#
+#   $ file x_1.12.5_amd64/tofu
+#   ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked,
+#   Go BuildID=…, BuildID[sha1]=8ce41c47…, stripped
+#   $ readelf -l … | grep -c INTERP  → 0
+#   $ readelf -d … | grep -c NEEDED  → 0
+#
+#   $ file x_1.12.5_arm64/tofu
+#   ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked,
+#   Go BuildID=…, BuildID[sha1]=a6c6cd15…, stripped
+#   $ readelf -l … | grep -c INTERP  → 0     $ readelf -d … | grep -c NEEDED → 0
+#
+#   $ file x_1.10.0_amd64/tofu   → …, statically linked, BuildID[sha1]=bf49ef6c…
+#   $ readelf -l … | grep -c INTERP  → 0     $ readelf -d … | grep -c NEEDED → 0
+#   $ file x_1.10.0_arm64/tofu   → …, statically linked, BuildID[sha1]=6820ed71…
+#   $ readelf -l … | grep -c INTERP  → 0     $ readelf -d … | grep -c NEEDED → 0
+#
+# And NOT UPX-packed, which would have forged that verdict — a packer stub
+# leaves no PT_INTERP/PT_DYNAMIC and no section headers, so `file` calls even a
+# glibc-dynamic binary "statically linked":
+#
+#   $ strings -a … | grep -c '^UPX'              → 0   (all four)
+#   $ readelf -h … | grep 'Start of section headers'
+#     Start of section headers:  400 (bytes into file)  (all four — not 0)
+#
+# No PT_INTERP and no DT_NEEDED on any of the four: the artifact requires
+# nothing of the host, so both Linux keys are BARE — no `+libc.*` suffix.
+# Container legs (ubuntu + alpine + fedora on both arches) live in
+# ../mirror-base.yml and are what turn that claim into evidence.
+#
+# ─── Scope + resolution (verified on EVERY in-range release) ────────────────
+#
+# The mirrored range is 31 releases, 1.10.0 … 1.12.5. ENUMERATED BY PARSED
+# SEMVER, NEVER BY DATE: OpenTofu runs PARALLEL PATCH TRAINS, so publication
+# order and version order disagree outright —
+#   v1.11.13 (2026-07-21) postdates v1.12.0 (2026-05-14)
+#   v1.10.10 (2026-05-11) postdates v1.11.6 (2026-04-08)
+# A "newest N by published_at" pull therefore interleaves trains and reports a
+# smaller in-range set than exists. Every one of the 31 was re-listed and each
+# pattern below matched EXACTLY ONE asset on EVERY release, both ways. A
+# pattern matching zero is silently skipped rather than an error, which would
+# yield a green run with a missing platform. Every asset name also embeds the
+# version of the tag that carries it (`tofu_1.12.5_*` under `v1.12.5`), checked
+# on all 31 — no release re-ships a previous version's binaries under a new tag.
+#
+# ⚠ EVERY PLATFORM SHIPS BOTH `.tar.gz` AND `.zip` — not just windows. Both
+# formats span the whole range (164 assets on every single release, uniformly),
+# so the choice is free and the ONLY requirement is consistency: matching both
+# gives 2 candidates per (os,arch) and a hard ambiguous error. This spec anchors
+# on `.tar.gz` for every platform, windows included.
+#
+# ⚠ DISTRO PACKAGES DROP THE OS TOKEN: `tofu_1.12.5_amd64.deb` beside
+# `tofu_1.12.5_linux_amd64.tar.gz` (likewise .apk/.rpm, for 386/amd64/arm/arm64).
+# An arch-token match that is not anchored on `_linux_` picks those up. Every
+# pattern below is anchored at both ends with the version and the os token
+# spelled out, so `.deb`/`.apk`/`.rpm` and the `.gpgsig`/`.pem`/`.sig` sidecars
+# (three per asset) and the release-wide `tofu_<V>_SHA256SUMS(+3 sidecars)`
+# are all unreachable.
+#
+# Upstream also publishes, and this mirror deliberately does not carry:
+#   tofu_<V>_linux_386.tar.gz     — ocx has no `386` Architecture
+#   tofu_<V>_linux_arm.tar.gz     — ocx has no 32-bit arm Architecture
+#   tofu_<V>_windows_386.tar.gz   — ocx has no `386` Architecture
+#   tofu_<V>_freebsd_{386,amd64,arm}.*  — ocx has no FreeBSD OperatingSystem
+#   tofu_<V>_openbsd_{386,amd64}.*      — ocx has no OpenBSD OperatingSystem
+#   tofu_<V>_solaris_amd64.*            — ocx has no Solaris OperatingSystem
+#   tofu_<V>_{386,amd64,arm,arm64}.{apk,deb,rpm}  — distro install path
+#   tofu_<V>_*.zip                — the format twin of every archive above
+# There is NO windows/arm64 and NO darwin/386 asset on any in-range release.
+assets:
+  linux/amd64:
+    - "^tofu_\\d+\\.\\d+\\.\\d+_linux_amd64\\.tar\\.gz$"
+  linux/arm64:
+    - "^tofu_\\d+\\.\\d+\\.\\d+_linux_arm64\\.tar\\.gz$"
+  # ── Pass 2 (darwin) ────────────────────────────────────────────────────────
+  # darwin/amd64:
+  #   - "^tofu_\\d+\\.\\d+\\.\\d+_darwin_amd64\\.tar\\.gz$"
+  # darwin/arm64:
+  #   - "^tofu_\\d+\\.\\d+\\.\\d+_darwin_arm64\\.tar\\.gz$"
+  # ── Pass 3 (windows) ───────────────────────────────────────────────────────
+  # windows/amd64:
+  #   - "^tofu_\\d+\\.\\d+\\.\\d+_windows_amd64\\.tar\\.gz$"
+
+# Every archive is FLAT: `tofu` (`tofu.exe` on windows) sits at the archive
+# ROOT beside CHANGELOG.md, LICENSE and README.md, with no wrapper directory
+# and no directory members at all. Verified by `tar tvf` on 1.10.0 and 1.12.5
+# for linux amd64/arm64, darwin amd64/arm64 and windows amd64 — four entries
+# each, identical shape, and the binary is the only mode-0755 one.
+#
+# So strip_components 0 on every platform. `1` would DELETE the binary and
+# hoist CHANGELOG/LICENSE/README into its place, because there is no top
+# directory to strip.
+asset_type:
+  type: archive
+  strip_components: 0
+
+# FORCED by the flat archive, not chosen. `bin_scan` only inspects an
+# interface-visible `${installPath}/<dir>` PATH entry, and this archive has no
+# subdirectory to point one at, so both `auto` and `verify` fail spec load at
+# exit 65:
+#
+#   bin_scan is enabled but metadata.json declares no interface-visible
+#   ${installPath}/<dir> PATH entry — the verification would inspect no file and
+#   pass green whatever the archive contains.
+#
+# The `binaries` list in metadata.json is therefore hand-maintained, exactly as
+# that error directs. It is short and stable: `tofu` (`tofu.exe` on Windows) is
+# the only mode-0755 entry in the archive at both ends of the range;
+# CHANGELOG.md, LICENSE and README.md are 0644 data. Quoted so no YAML 1.1
+# reader folds the bare word into boolean `false`.
+bin_scan: "off"
+
+metadata:
+  default: metadata.json
+
+catalog:
+  logo: logo.svg
+
+versions:
+  # 1.10.0 per the run's package binding — the oldest release whose asset set
+  # resolves every declared platform. 31 releases in range; none is asset-less.
+  min: "1.10.0"
+  new_per_run: 5
+  poll_interval: "3 */6 * * *"
+
+tests:
+  # `script:` resolves from the REPOSITORY ROOT — unlike `metadata.default` and
+  # `catalog.logo` above, which resolve against this spec's own directory.
+  - name: smoke
+    script: opentofu/tests/smoke.star
+
+annotations:
+  # From the Phase 1.5 license gate:
+  #   $ gh api repos/opentofu/opentofu/license --jq '.license.spdx_id'
+  #   MPL-2.0
+  org.opencontainers.image.licenses: "MPL-2.0"
+
+announce:
+  # Spelled out, not derived from target.repository — the logical name and the
+  # physical path are related by convention only.
+  package: opentofu/opentofu
+  fork: ocx-contrib/index
