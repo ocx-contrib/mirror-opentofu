@@ -108,10 +108,10 @@ assets:
   linux/arm64:
     - "^tofu_\\d+\\.\\d+\\.\\d+_linux_arm64\\.tar\\.gz$"
   # ── Pass 2 (darwin) ────────────────────────────────────────────────────────
-  # darwin/amd64:
-  #   - "^tofu_\\d+\\.\\d+\\.\\d+_darwin_amd64\\.tar\\.gz$"
-  # darwin/arm64:
-  #   - "^tofu_\\d+\\.\\d+\\.\\d+_darwin_arm64\\.tar\\.gz$"
+  darwin/amd64:
+    - "^tofu_\\d+\\.\\d+\\.\\d+_darwin_amd64\\.tar\\.gz$"
+  darwin/arm64:
+    - "^tofu_\\d+\\.\\d+\\.\\d+_darwin_arm64\\.tar\\.gz$"
   # ── Pass 3 (windows) ───────────────────────────────────────────────────────
   # windows/amd64:
   #   - "^tofu_\\d+\\.\\d+\\.\\d+_windows_amd64\\.tar\\.gz$"
